@@ -95,6 +95,8 @@ def test_process_item_id(item_type, item_id, igdb_auth, tmdb_auth, youtube_url):
 
     assert data['id']
     assert data['youtube_theme_url']
+    assert data['youtube_theme_urls']
+    assert data['youtube_theme_url'] == data['youtube_theme_urls'][0]
 
 
 def test_main_daily_update(daily_update_args, igdb_auth, tmdb_auth):
@@ -107,11 +109,12 @@ def test_main_issue_update_movie(issue_update_args, submission_movie, tmdb_auth)
 
     assert os.path.isfile(file_path)
 
-    # ensure youtube_theme_url is correct
     with open(file_path, 'r') as f:
         data = json.load(f)
 
     assert data['youtube_theme_url'] == submission_movie['youtube_theme_url']
+    assert data['youtube_theme_urls'] == [submission_movie['youtube_theme_url']]
+    assert data['youtube_theme_url'] == data['youtube_theme_urls'][0]
 
 
 def test_main_issue_update_movie_collection(issue_update_args, submission_movie_collection, tmdb_auth):
@@ -120,11 +123,12 @@ def test_main_issue_update_movie_collection(issue_update_args, submission_movie_
 
     assert os.path.isfile(file_path)
 
-    # ensure youtube_theme_url is correct
     with open(file_path, 'r') as f:
         data = json.load(f)
 
     assert data['youtube_theme_url'] == submission_movie_collection['youtube_theme_url']
+    assert data['youtube_theme_urls'] == [submission_movie_collection['youtube_theme_url']]
+    assert data['youtube_theme_url'] == data['youtube_theme_urls'][0]
 
 
 def test_main_issue_update_tv_show(issue_update_args, submission_tv_show, tmdb_auth):
@@ -133,11 +137,12 @@ def test_main_issue_update_tv_show(issue_update_args, submission_tv_show, tmdb_a
 
     assert os.path.isfile(file_path)
 
-    # ensure youtube_theme_url is correct
     with open(file_path, 'r') as f:
         data = json.load(f)
 
     assert data['youtube_theme_url'] == submission_tv_show['youtube_theme_url']
+    assert data['youtube_theme_urls'] == [submission_tv_show['youtube_theme_url']]
+    assert data['youtube_theme_url'] == data['youtube_theme_urls'][0]
 
 
 def test_main_issue_update_game(issue_update_args, submission_game, igdb_auth):
@@ -146,11 +151,12 @@ def test_main_issue_update_game(issue_update_args, submission_game, igdb_auth):
 
     assert os.path.isfile(file_path)
 
-    # ensure youtube_theme_url is correct
     with open(file_path, 'r') as f:
         data = json.load(f)
 
     assert data['youtube_theme_url'] == submission_game['youtube_theme_url']
+    assert data['youtube_theme_urls'] == [submission_game['youtube_theme_url']]
+    assert data['youtube_theme_url'] == data['youtube_theme_urls'][0]
 
 
 def test_main_issue_update_game_collection(issue_update_args, submission_game_collection, igdb_auth):
@@ -159,11 +165,12 @@ def test_main_issue_update_game_collection(issue_update_args, submission_game_co
 
     assert os.path.isfile(file_path)
 
-    # ensure youtube_theme_url is correct
     with open(file_path, 'r') as f:
         data = json.load(f)
 
     assert data['youtube_theme_url'] == submission_game_collection['youtube_theme_url']
+    assert data['youtube_theme_urls'] == [submission_game_collection['youtube_theme_url']]
+    assert data['youtube_theme_url'] == data['youtube_theme_urls'][0]
 
 
 def test_main_issue_update_game_franchise(issue_update_args, submission_game_franchise, igdb_auth):
@@ -172,11 +179,49 @@ def test_main_issue_update_game_franchise(issue_update_args, submission_game_fra
 
     assert os.path.isfile(file_path)
 
-    # ensure youtube_theme_url is correct
     with open(file_path, 'r') as f:
         data = json.load(f)
 
     assert data['youtube_theme_url'] == submission_game_franchise['youtube_theme_url']
+    assert data['youtube_theme_urls'] == [submission_game_franchise['youtube_theme_url']]
+    assert data['youtube_theme_url'] == data['youtube_theme_urls'][0]
+
+
+def test_add_alternative_youtube_url(issue_update_args, tmdb_auth, youtube_url):
+    """Tests that submitting with action='Add Alternative' appends to youtube_theme_urls."""
+    primary_url = youtube_url
+    alt_url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+
+    # first write with Replace so we have a known starting state
+    data = updater.process_item_id(
+        item_type='movie',
+        item_id=710,
+        youtube_url=primary_url,
+        action='Replace',
+    )
+    assert data['youtube_theme_url'] == primary_url
+    assert data['youtube_theme_urls'] == [primary_url]
+
+    # now add an alternative
+    data = updater.process_item_id(
+        item_type='movie',
+        item_id=710,
+        youtube_url=alt_url,
+        action='Add Alternative',
+    )
+    assert data['youtube_theme_url'] == primary_url  # primary unchanged
+    assert alt_url in data['youtube_theme_urls']
+    assert len(data['youtube_theme_urls']) == 2
+    assert data['youtube_theme_url'] == data['youtube_theme_urls'][0]
+
+    # adding the same alt again should not duplicate it
+    data = updater.process_item_id(
+        item_type='movie',
+        item_id=710,
+        youtube_url=alt_url,
+        action='Add Alternative',
+    )
+    assert len(data['youtube_theme_urls']) == 2
 
 
 def test_process_submission(submission_movie):

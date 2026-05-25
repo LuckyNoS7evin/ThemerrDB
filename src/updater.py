@@ -305,7 +305,8 @@ for t in range(40):
 
 def process_item_id(item_type: str,
                     item_id: Union[int, str],
-                    youtube_url: Optional[str] = None) -> dict:
+                    youtube_url: Optional[str] = None,
+                    action: str = 'Replace') -> dict:
     destination_filenames = []
 
     # empty dictionary to handle future cases
@@ -477,14 +478,32 @@ def process_item_id(item_type: str,
                                         base_dir=databases[item_type]['path'])
 
                 # check if youtube_theme_url is the same as before, unless there is no youtube_url
-                if youtube_url and og_data.get('youtube_theme_url') == youtube_url:
-                    with open("auto_close.md", "w") as auto_close_f:
-                        auto_close_f.write('The YouTube url provided is the same as the current one.')
+                existing_urls = og_data.get('youtube_theme_urls', [og_data.get('youtube_theme_url')])
+                if youtube_url and youtube_url in existing_urls:
+                    if action == 'Replace' and og_data.get('youtube_theme_url') == youtube_url:
+                        with open("auto_close.md", "w") as auto_close_f:
+                            auto_close_f.write('The YouTube url provided is the same as the current one.')
+                    elif action == 'Add Alternative':
+                        with open("auto_close.md", "w") as auto_close_f:
+                            auto_close_f.write('The YouTube url provided is already in the list of alternatives.')
 
         # update the existing dictionary with new values from json_data
         og_data.update(json_data)
         if youtube_url:
-            og_data['youtube_theme_url'] = youtube_url
+            # auto-migrate legacy single-URL data to the list format
+            if 'youtube_theme_url' in og_data and 'youtube_theme_urls' not in og_data:
+                og_data['youtube_theme_urls'] = [og_data['youtube_theme_url']]
+
+            if action == 'Add Alternative':
+                urls = og_data.get('youtube_theme_urls', [])
+                if youtube_url not in urls:
+                    urls.append(youtube_url)
+                og_data['youtube_theme_urls'] = urls
+            else:
+                og_data['youtube_theme_urls'] = [youtube_url]
+
+            # keep youtube_theme_url in sync with the primary (first) entry
+            og_data['youtube_theme_url'] = og_data['youtube_theme_urls'][0]
 
         # clean old data
         clean_old_data(data=og_data, item_type=item_type)
@@ -547,7 +566,8 @@ def update_contributor_info(original: bool, base_dir: str) -> None:
         json.dump(obj=contributor_data, indent=4, fp=contributor_f, sort_keys=True)
 
 
-def process_issue_update(database_url: Optional[str] = None, youtube_url: Optional[str] = None) -> Union[str, bool]:
+def process_issue_update(database_url: Optional[str] = None, youtube_url: Optional[str] = None,
+                          action: str = 'Replace') -> Union[str, bool]:
     # placeholders
     exceptions = []
     youtube_valid = False
@@ -560,9 +580,12 @@ def process_issue_update(database_url: Optional[str] = None, youtube_url: Option
         if not database_url:
             database_url = submission['database_url'].strip()
 
+        action = submission.get('action', 'Replace')
+
         # check the validity of provided YouTube url and update item dictionary
         if not youtube_url:
-            youtube_url = check_youtube(data=submission)
+            is_alternative = action == 'Add Alternative'
+            youtube_url = check_youtube(data=submission, is_alternative=is_alternative)
 
     if youtube_url:
         youtube_valid = True
@@ -591,7 +614,7 @@ def process_issue_update(database_url: Optional[str] = None, youtube_url: Option
         except AttributeError as e:
             exceptions.append((item_type, e))
         else:
-            process_item_id(item_type=item_type, item_id=item_id, youtube_url=youtube_url)
+            process_item_id(item_type=item_type, item_id=item_id, youtube_url=youtube_url, action=action)
             return item_type if youtube_valid else False
 
     # if we get here, we didn't find a match
@@ -658,13 +681,14 @@ def is_valid_duration(content_details: dict, min_seconds: int = 20, max_seconds:
     return is_valid, total_seconds
 
 
-def validate_youtube_requirements(item: dict, min_seconds: int = 20, max_seconds: int = 300) -> list[str]:
+def validate_youtube_requirements(item: dict, min_seconds: int = 20, max_seconds: int = 300,
+                                   skip_us_check: bool = False) -> list[str]:
     """Validate YouTube video against ThemerrDB requirements.
 
     Returns a list of error messages. Empty list means all validations passed.
     Requirements:
       1) no age restriction
-      2) available in the USA
+      2) available in the USA (skipped when skip_us_check=True, e.g. for alternative/backup URLs)
       3) length between 0:20 and 5:00 (inclusive)
       4) video is public (not private or unlisted)
     """
@@ -676,8 +700,8 @@ def validate_youtube_requirements(item: dict, min_seconds: int = 20, max_seconds
     if is_age_restricted(content_details):
         errors.append('Video is age-restricted on YouTube.')
 
-    # 2) Regional availability (USA)
-    if not is_available_in_us(content_details):
+    # 2) Regional availability (USA) — skipped for alternative URLs that may be region-specific
+    if not skip_us_check and not is_available_in_us(content_details):
         errors.append('Video is not available in the USA.')
 
     # 3) Duration check
@@ -696,7 +720,7 @@ def validate_youtube_requirements(item: dict, min_seconds: int = 20, max_seconds
     return errors
 
 
-def check_youtube(data: dict) -> Optional[str]:
+def check_youtube(data: dict, is_alternative: bool = False) -> Optional[str]:
     url = data['youtube_theme_url'].strip()
 
     # Strip playlist parameters if present
@@ -760,7 +784,7 @@ def check_youtube(data: dict) -> Optional[str]:
 
         # Enforce ThemerrDB validation requirements
         item = response['items'][0]
-        validation_errors = validate_youtube_requirements(item=item)
+        validation_errors = validate_youtube_requirements(item=item, skip_us_check=is_alternative)
         if validation_errors:
             # Write all validation errors
             for error_msg in validation_errors:

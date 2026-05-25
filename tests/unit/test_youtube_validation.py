@@ -210,3 +210,20 @@ class TestValidateYouTubeRequirements:
         item = self.make_item("PT2M", rr={"allowed": ["US", "CA"]})
         errors = validate_youtube_requirements(item)
         assert len(errors) == 0
+
+    def test_us_blocked_fails_by_default(self):
+        item = self.make_item("PT2M", rr={"allowed": ["CA"]})
+        errors = validate_youtube_requirements(item)
+        assert any("USA" in e for e in errors)
+
+    def test_us_blocked_passes_with_skip_us_check(self):
+        item = self.make_item("PT2M", rr={"allowed": ["CA"]})
+        errors = validate_youtube_requirements(item, skip_us_check=True)
+        assert len(errors) == 0
+
+    def test_skip_us_check_does_not_skip_other_errors(self):
+        item = self.make_item("PT10S", rr={"allowed": ["CA"]}, age="ytAgeRestricted")
+        errors = validate_youtube_requirements(item, skip_us_check=True)
+        assert any("too short" in e for e in errors)
+        assert any("age-restricted" in e for e in errors)
+        assert not any("USA" in e for e in errors)
