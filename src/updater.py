@@ -580,7 +580,7 @@ def process_issue_update(database_url: Optional[str] = None, youtube_url: Option
         if not database_url:
             database_url = submission['database_url'].strip()
 
-        action = submission.get('action', 'Replace')
+        action = submission.get('action') or 'Replace'
 
         # check the validity of provided YouTube url and update item dictionary
         if not youtube_url:

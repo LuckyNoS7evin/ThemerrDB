@@ -34,12 +34,12 @@ body:
     id: action
     attributes:
       label: Action
-      description: Select whether to replace the current theme or add this as an alternative (e.g. for a region-locked or proof-of-origin backup).
+      description: Leave blank when submitting a new theme. For existing themes, select Replace to update the current URL or Add Alternative to keep the existing URL and add a backup (e.g. for region-locked or proof-of-origin videos).
       options:
         - Replace
         - Add Alternative
     validations:
-      required: true
+      required: false
   - type: input
     id: replacement_reason
     attributes:
